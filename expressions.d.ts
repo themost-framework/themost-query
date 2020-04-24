@@ -60,6 +60,11 @@ export declare class MethodCallExpression implements IExpression {
     exprOf(): any;
 }
 
+export declare class SequenceExpression implements IExpression {
+    constructor();
+    exprOf(): any;
+}
+
 export declare function createArithmeticExpression(left: any, operator:string, right: any): ArithmeticExpression;
 
 export declare function createComparisonExpression(left: any, operator:string, right: any): ComparisonExpression;

@@ -280,6 +280,37 @@ Operators.In = '$in';
 Operators.NotIn = '$nin';
 Operators.And = '$and';
 Operators.Or = '$or';
+/**
+ * @class
+ */
+function SequenceExpression() {
+    this.value = [];
+}
+SequenceExpression.prototype.exprOf = function() {
+    // eslint-disable-next-line no-empty-pattern
+    return this.value.reduce((previousValue, currentValue, currentIndex) => {
+        if (currentValue instanceof MemberExpression) {
+            Object.defineProperty(previousValue, currentValue.name, {
+                value: 1,
+                enumerable: true,
+                configurable: true
+            });
+            return previousValue;
+        }
+        else if (currentValue instanceof MethodCallExpression) {
+            // validate method name e.g. Math.floor and get only the last part
+            const name = currentValue.name.split('.');
+            Object.defineProperty(previousValue, `${name[name.length-1]}${currentIndex}`, {
+                value: currentValue.exprOf(),
+                enumerable: true,
+                configurable: true
+            });
+            return previousValue;
+        }
+        throw new Error('Sequence expression is invalid or has a member which its type has not implemented yet');
+    }, {});
+}
+
 
 if (typeof exports !== 'undefined')
 {
@@ -290,6 +321,7 @@ if (typeof exports !== 'undefined')
     module.exports.ComparisonExpression =  ComparisonExpression;
     module.exports.LiteralExpression =  LiteralExpression;
     module.exports.LogicalExpression =  LogicalExpression;
+    module.exports.SequenceExpression =  SequenceExpression;
     /**
      * @param {*=} left The left operand
      * @param {string=} operator The operator
