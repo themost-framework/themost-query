@@ -1,25 +1,22 @@
-/**
- * @license
- * MOST Web Framework 2.0 Codename Blueshift
- * Copyright (c) 2017, THEMOST LP All rights reserved
- *
- * Use of this source code is governed by an BSD-3-Clause license that can be
- * found in the LICENSE file at https://themost.io/license
- */
-var QueryExpression = require('./query').QueryExpression;
-
+// MOST Web Framework 2.0 Codename Blueshift Copyright (c) 2017-2020, THEMOST LP All rights reserved
+const {QueryExpression} = require('./query');
 /**
  * @param {string} tz
  */
 function convertTimezone(tz) {
     if (tz === "Z") return 0;
-    var m = tz.match(/([+\-\s])(\d\d):?(\d\d)?/);
+    let m = tz.match(/([+\-\s])(\d\d):?(\d\d)?/);
     if (m) {
         return (m[1] === '-' ? -1 : 1) * (parseInt(m[2], 10) + ((m[3] ? parseInt(m[3], 10) : 0) / 60)) * 60;
     }
     return false;
 }
 
+/**
+ * @param number
+ * @param {number=} length
+ * @returns {string}
+ */
 function zeroPad(number, length) {
     number = number.toString();
     while (number.length < length) {
@@ -28,11 +25,17 @@ function zeroPad(number, length) {
     return number;
 }
 
+/**
+ *
+ * @param date
+ * @param timeZone
+ * @returns {string}
+ */
 function dateToString(date, timeZone) {
-    var dt = new Date(date);
+    let dt = new Date(date);
 
     if (timeZone !== 'local') {
-        var tz = convertTimezone(timeZone);
+        let tz = convertTimezone(timeZone);
 
         dt.setTime(dt.getTime() + (dt.getTimezoneOffset() * 60000));
         if (tz !== false) {
@@ -40,13 +43,13 @@ function dateToString(date, timeZone) {
         }
     }
 
-    var year   = dt.getFullYear();
-    var month  = zeroPad(dt.getMonth() + 1, 2);
-    var day    = zeroPad(dt.getDate(), 2);
-    var hour   = zeroPad(dt.getHours(), 2);
-    var minute = zeroPad(dt.getMinutes(), 2);
-    var second = zeroPad(dt.getSeconds(), 2);
-    var millisecond = zeroPad(dt.getMilliseconds(), 3);
+    let year   = dt.getFullYear();
+    let month  = zeroPad(dt.getMonth() + 1, 2);
+    let day    = zeroPad(dt.getDate(), 2);
+    let hour   = zeroPad(dt.getHours(), 2);
+    let minute = zeroPad(dt.getMinutes(), 2);
+    let second = zeroPad(dt.getSeconds(), 2);
+    let millisecond = zeroPad(dt.getMilliseconds(), 3);
 
     return year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ':' + second + '.' + millisecond;
 }
@@ -56,13 +59,14 @@ function dateToString(date, timeZone) {
  * @returns {string}
  */
 function bufferToString(buffer) {
-    var hex = '';
+    let hex = '';
     try {
         hex = buffer.toString('hex');
     } catch (err) {
         // node v0.4.x does not support hex / throws unknown encoding error
-        for (var i = 0; i < buffer.length; i++) {
-            var byte = buffer[i];
+        for (let i = 0; i < buffer.length; i++) {
+            let byte = buffer[i];
+            // noinspection JSCheckFunctionSignatures
             hex += zeroPad(byte.toString(16));
         }
     }
@@ -71,10 +75,10 @@ function bufferToString(buffer) {
 }
 
 function objectToValues(object, timeZone) {
-    var values = [];
-    for (var key in object) {
-        if (object.hasOwnProperty(key)) {
-            var value = object[key];
+    let values = [];
+    for (let key in object) {
+        if (Object.prototype.hasOwnProperty.call(object, key)) {
+            let value = object[key];
             if(typeof value === 'function') {
                 continue;
             }
@@ -104,7 +108,7 @@ function escapeId(val, forbidQualified) {
     return '`' + val.replace(/`/g, '``').replace(/\./g, '`.`') + '`';
 }
 // eslint-disable-next-line no-control-regex
-var STR_ESCAPE_REGEXP = /[\0\n\r\b\t\\'"\x1a]/g;
+let STR_ESCAPE_REGEXP = /[\0\n\r\b\t\\'"\x1a]/g;
 
 function escape(val, stringifyObjects, timeZone) {
     if (typeof val === 'undefined' || val === null) {
@@ -151,12 +155,12 @@ function escape(val, stringifyObjects, timeZone) {
 
 function format(sql, values, stringifyObjects, timeZone) {
     values = (typeof values === 'undefined' || values === null) ? [] : [].concat(values);
-    var index = 0;
+    let index = 0;
     return sql.replace(/\?\??/g, function(match) {
         if (index === values.length) {
             return match;
         }
-        var value = values[index++];
+        let value = values[index++];
         return match === '??'
             ? escapeId(value)
             : escape(value, stringifyObjects, timeZone);
@@ -176,7 +180,7 @@ function QueryUtils() {
  * @param {string|*} entity - The name of the entity
  */
 QueryUtils.query = function(entity) {
-    var q = new QueryExpression();
+    let q = new QueryExpression();
     return q.from(entity);
 };
 /**
@@ -184,7 +188,7 @@ QueryUtils.query = function(entity) {
  * @param {...*} fields
  */
 QueryUtils.select = function(fields) {
-    var q = new QueryExpression();
+    let q = new QueryExpression();
     return q.select.apply(q,fields);
 };
 /**
@@ -192,7 +196,7 @@ QueryUtils.select = function(fields) {
  * @param {*} obj - The object to insert
  */
 QueryUtils.insert = function(obj) {
-    var q = new QueryExpression();
+    let q = new QueryExpression();
     return q.insert(obj);
 };
 
@@ -201,7 +205,7 @@ QueryUtils.insert = function(obj) {
  * @param {string|*} entity - The name of the entity
  */
 QueryUtils.update = function(entity) {
-    var q = new QueryExpression();
+    let q = new QueryExpression();
     return q.update(entity);
 };
 
@@ -210,7 +214,7 @@ QueryUtils.update = function(entity) {
  * @param {string} entity - The name of the entity
  */
 QueryUtils.delete = function(entity) {
-    var q = new QueryExpression();
+    let q = new QueryExpression();
     return q.delete(entity);
 };
 
@@ -220,7 +224,7 @@ QueryUtils.delete = function(entity) {
  * @param  {*} obj
  */
 QueryUtils.where = function(obj) {
-    var q = new QueryExpression();
+    let q = new QueryExpression();
     return q.where(obj);
 };
 
@@ -251,8 +255,8 @@ SqlUtils.format = function(sql, values) {
     return format(sql, values);
 };
 
-
-if (typeof exports !== 'undefined') {
-    module.exports.QueryUtils = QueryUtils;
-    module.exports.SqlUtils = SqlUtils;
+module.exports = {
+    QueryUtils,
+    SqlUtils
 }
+

@@ -1,0 +1,43 @@
+{
+  "env": {
+    "browser": false,
+    "node": true,
+    "es6": true,
+    "jquery": false
+  },
+  "globals": {
+    "describe": false,
+    "fdescribe": false,
+    "IntlPolyfill": false,
+    "before": false,
+    "after": false,
+    "beforeAll": false,
+    "beforeEach": false,
+    "afterAll": false,
+    "afterEach": false,
+    "it": false,
+    "fit": false,
+    "angular": false,
+    "jQuery": false,
+    "jasmine": false,
+    "expect": false,
+    "expectAsync": false,
+    "spyOn": false,
+    "spyOnProperty": false
+  },
+  "extends": "eslint:recommended",
+  "rules": {
+    "no-console": "warn",
+    "no-invalid-this": "warn",
+    "no-undef": "error",
+    "no-unused-vars": "warn",
+    "no-var": [
+      "error"
+    ],
+    "strict": [
+      2,
+      "never"
+    ]
+  }
+}
+
