@@ -28,6 +28,7 @@ export declare class Operators {
     static NotIn : string;
     static And : string;
     static Or : string;
+    static BitAnd : string;
 }
 
 export declare class ArithmeticExpression implements IExpression {
@@ -56,6 +57,11 @@ export declare class ComparisonExpression implements IExpression {
 }
 
 export declare class MethodCallExpression implements IExpression {
+    constructor(name: string, args: Array<any>);
+    exprOf(): any;
+}
+
+export declare class MethodCallExpressionN extends MethodCallExpression {
     constructor(name: string, args: Array<any>);
     exprOf(): any;
 }

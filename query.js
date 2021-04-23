@@ -1,18 +1,11 @@
-/**
- * @license
- * MOST Web Framework 2.0 Codename Blueshift
- * Copyright (c) 2017, THEMOST LP All rights reserved
- *
- * Use of this source code is governed by an BSD-3-Clause license that can be
- * found in the LICENSE file at https://themost.io/license
- */
-///
+// MOST Web Framework Copyright (c) 2014-2021 THEMOST LP released under the BSD3-Clause license
+
 var sprintf = require('sprintf').sprintf;
 var Args = require('@themost/common').Args;
 var _ = require('lodash');
 var Symbol = require('symbol');
 var aggregate = Symbol();
-var instanceOf = require('./instance-of').instanceOf;
+var ClosureParser = require('./closures').ClosureParser;
 // eslint-disable-next-line no-unused-vars
 //noinspection JSUnusedLocalSymbols
 require('./natives');
@@ -349,19 +342,25 @@ QueryExpression.prototype.distinct = function(value)
 };
 
 /**
- * @param {*} field
+ * @param {*} expr
+ * @param {*} params
  * @returns {QueryExpression}
  */
-QueryExpression.prototype.where = function(field)
+QueryExpression.prototype.where = function(expr, params)
 {
-    if (_.isNil(field))
+    if (typeof expr === 'function') {
+        // parse closure
+        this.$where = new ClosureParser().parseFilter(expr, params);
+        return this;
+    }
+    if (_.isNil(expr))
         throw new Error('Left operand cannot be empty. Expected string or object.');
     delete this.$where;
-    if (typeof field === 'string') {
-        this.prop(field);
+    if (typeof expr === 'string') {
+        this.prop(expr);
     }
-    else if (typeof field === 'object') {
-        this.prop(QueryField.prototype.nameOf.call(field))
+    else if (typeof expr === 'object') {
+        this.prop(QueryField.prototype.nameOf.call(expr))
     }
     else {
         throw new Error('Invalid left operand. Expected string or object.');
@@ -490,16 +489,22 @@ QueryExpression.prototype.set = function(obj)
  * // SELECT UserBase.id, UserBase.name FROM UserBase
  */
 /* eslint-disable-next-line no-unused-vars */
-QueryExpression.prototype.select = function(field)
+QueryExpression.prototype.select = function()
 {
     // get argument
-    var arr = Array.prototype.slice.call(arguments);
-    if (arr.length === 0) {
+    var args = Array.prototype.slice.call(arguments);
+    if (args.length === 0) {
         return this;
+    }
+    // todo: validate select closure argument
+    if (typeof args[0] === 'function') {
+        var selectClosure = args[0];
+        var closureParams = args[1];
+        args = new ClosureParser().parseSelect(selectClosure, closureParams);
     }
     // validate arguments
     var fields = [];
-    arr.forEach( function (x) {
+    args.forEach( function (x) {
         // backward compatibility
         // any argument may be an array of fields
         // this operation needs to be deprecated
@@ -541,7 +546,7 @@ QueryExpression.prototype.count = function(alias) {
 };
 /**
  * Sets the entity of a select query expression
- * @param entity {string|QueryEntity|*} A string that represents the entity name
+ * @param {*} entity {string|QueryEntity|*} A string that represents the entity name
  * @returns {QueryExpression}
  */
 QueryExpression.prototype.from = function(entity) {
@@ -612,36 +617,108 @@ QueryExpression.prototype.join = function(entity, props, alias) {
 };
 /**
  * Sets the join expression of the last join entity
- * @param obj {Array|*}
+ * @param {*...} arg
  * @returns {QueryExpression}
  */
-QueryExpression.prototype.with = function(obj) {
+QueryExpression.prototype.with = function() {
 
-    if (_.isNil(obj))
+    var args = Array.from(arguments);
+    if (args.length === 0)
         return this;
-    if (_.isNil(this.privates.expand))
+    if (this.privates.expand == null) {
         throw new Error('Join entity cannot be empty when adding a join expression. Use QueryExpression.join(entity, props) before.');
-    if (obj instanceof QueryExpression)
+    }
+    // validate local and foreign fields closures
+    // e.g.
+    // .with(
+    //    (x: any) => x.Shipper,
+    //    (y: any) => y.ShipperID
+    // )
+    if (args.length === 2) {
+         if (typeof args[0] === 'function' &&
+            typeof args[1] === 'function') {
+                // parse closures and create query expression
+                var localField = new ClosureParser().parseSelect(args[0]);
+                var foreignField = new ClosureParser().parseSelect(args[1]);
+
+                // get entity name from select attribute
+                var localEntity= Object.key(this.$select);
+                if (localEntity == null) {
+                    // if name is not defined
+                    // get local entity from privates
+                    localEntity = this.privates.entity
+                }
+                // get foreign entity name
+                var foreignEntity;
+                if (this.privates.expand.$entity.name) {
+                    foreignEntity = this.privates.expand.$entity.name;
+                } else {
+                    foreignEntity = Object.key(this.privates.expand.$entity);
+                }
+                // set join statement as query expression
+                args = [ 
+                    new QueryExpression().where(
+                        new QueryField(localField[0])
+                    .from(localEntity)).equal(
+                        new QueryField(foreignField[0])
+                    .from(foreignEntity))
+                ];
+         }
+         if (typeof args[0] === 'string' &&
+            typeof args[1] === 'string') {
+                // get entity name from select attribute
+                localEntity= Object.key(this.$select);
+                if (localEntity == null) {
+                    // if name is not defined
+                    // get local entity from privates
+                    localEntity = this.privates.entity
+                }
+                // get foreign entity name
+                if (this.privates.expand.$entity.name) {
+                    foreignEntity = this.privates.expand.$entity.name;
+                } else {
+                    foreignEntity = Object.key(this.privates.expand.$entity);
+                }
+                
+                // set join statement as query expression
+                args = [ 
+                    new QueryExpression().where(
+                        new QueryField(args[0])
+                    .from(localEntity)).equal(
+                        new QueryField(args[1])
+                    .from(foreignEntity))
+                ];
+            }
+    }
+    if (args.length === 1 && typeof args[0] === 'function') {
+        args = [
+            new ClosureParser().parseFilter(args[0])
+         ];
+    }
+
+
+    if (args[0] instanceof QueryExpression)
     {
         /**
          * @type {QueryExpression}
          */
-        var expr = obj;
+        var expr = args[0];
         var where = null;
-        if (expr.$where)
-            where = expr.$prepared ? { $and: [expr.$prepared, expr.$where] } : expr.$where;
-        else if (expr.$prepared)
+        if (expr.$where) {
+             where = expr.$prepared ? { $and: [expr.$prepared, expr.$where] } : expr.$where;
+        } else if (expr.$prepared) {
             where = expr.$prepared;
+        }
         this.privates.expand.$with = where;
     }
     else {
-        this.privates.expand.$with = obj;
+        this.privates.expand.$with = args[0];
     }
-    if (_.isNil(this.$expand)) {
+    if (this.$expand == null) {
         this.$expand = this.privates.expand;
     }
     else {
-        if (_.isArray(this.$expand)) {
+        if (Array.isArray(this.$expand)) {
             this.$expand.push(this.privates.expand);
         }
         else {
@@ -660,82 +737,118 @@ QueryExpression.prototype.with = function(obj) {
 // noinspection JSUnusedGlobalSymbols
 /**
  * Applies an ascending ordering to a query expression
- * @param name {string|Array}
+ * @param {...*} arg
  * @returns {QueryExpression}
  */
-QueryExpression.prototype.orderBy = function(name) {
-
-    if (_.isNil(name))
+QueryExpression.prototype.orderBy = function() {
+    var args = Array.from(arguments);
+    if (args.length === 0) {
         return this;
-    if (_.isNil(this.$order))
-        this.$order = [];
-    this.$order.push({ $asc: name });
+    }
+    if (typeof args[0] === 'function') {
+        var selectClosure = args[0];
+        var closureParams = args[1];
+        args = new ClosureParser().parseSelect(selectClosure, closureParams);
+    }
+    this.$order = this.$order || [];
+    this.$order.push.apply(this.$order, args.map(function(arg) {
+        return { $asc: arg }
+    }));
     return this;
 };
 // noinspection JSUnusedGlobalSymbols
 /**
  * Applies a descending ordering to a query expression
- * @param name
+ * @param {...*} arg
  * @returns {QueryExpression}
  */
-QueryExpression.prototype.orderByDescending = function(name) {
+QueryExpression.prototype.orderByDescending = function() {
 
-    if (_.isNil(name))
+    var args = Array.from(arguments);
+    if (args.length === 0) {
         return this;
-    if (_.isNil(this.$order))
-        this.$order = [];
-    this.$order.push({ $desc: name });
+    }
+    if (typeof args[0] === 'function') {
+        var selectClosure = args[0];
+        var closureParams = args[1];
+        args = new ClosureParser().parseSelect(selectClosure, closureParams);
+    }
+    this.$order = this.$order || [];
+    this.$order.push.apply(this.$order, args.map(function(arg) {
+        return { $desc: arg }
+    }));
     return this;
 };
 
 /**
  * Performs a subsequent ordering in a query expression
- * @param name {string|Array}
+ * @param {...*} arg
  * @returns {QueryExpression}
  */
-QueryExpression.prototype.thenBy = function(name) {
-
-    if (_.isNil(name))
+QueryExpression.prototype.thenBy = function() {
+    if (this.$order == null) {
         return this;
-    if (_.isNil(this.$order))
-    //throw exception (?)
+    }
+    var args = Array.from(arguments);
+    if (args.length === 0) {
         return this;
-    this.$order.push({ $asc: name });
+    }
+    if (typeof args[0] === 'function') {
+        var selectClosure = args[0];
+        var closureParams = args[1];
+        args = new ClosureParser().parseSelect(selectClosure, closureParams);
+    }
+    this.$order.push.apply(this.$order, args.map(function(arg) {
+        return { $asc: arg }
+    }));
     return this;
 };
 
 /**
  * Performs a subsequent ordering in a query expression
- * @param name {string|Array}
+ * @param {...*} arg
  * @returns {QueryExpression}
  */
-QueryExpression.prototype.thenByDescending = function(name) {
-
-    if (_.isNil(name))
+QueryExpression.prototype.thenByDescending = function() {
+    if (this.$order == null) {
         return this;
-    if (_.isNil(this.$order))
-    //throw exception (?)
+    }
+    var args = Array.from(arguments);
+    if (args.length === 0) {
         return this;
-    this.$order.push({ $desc: name });
+    }
+    if (typeof args[0] === 'function') {
+        var selectClosure = args[0];
+        var closureParams = args[1];
+        args = new ClosureParser().parseSelect(selectClosure, closureParams);
+    }
+    this.$order.push.apply(this.$order, args.map(function(arg) {
+        return { $desc: arg }
+    }));
     return this;
 };
 // noinspection JSUnusedGlobalSymbols
 /**
  *
- * @param {...*} field
+ * @param {...*} arg
  * @returns {QueryExpression}
  */
 /* eslint-disable-next-line no-unused-vars */
-QueryExpression.prototype.groupBy = function(field) {
+QueryExpression.prototype.groupBy = function() {
 
     // get argument
-    var arr = Array.prototype.slice.call(arguments);
-    if (arr.length === 0) {
+    var args = Array.prototype.slice.call(arguments);
+    if (args.length === 0) {
         return this;
+    }
+    if (typeof args[0] === 'function') {
+        var groupByClosure = args[0];
+        var closureParams = args[1];
+        args = new ClosureParser().parseSelect(groupByClosure, closureParams);
     }
     // validate arguments
     var fields = [];
-    arr.forEach( function (x) {
+    args.forEach( function (x) {
         // backward compatibility
         // any argument may be an array of fields
         // this operation needs to be deprecated
@@ -1565,7 +1678,7 @@ QueryField.prototype.count = function(name) {
  * @return {QueryField}
  */
 /* eslint-disable-next-line no-unused-vars */
-QueryField.prototype.concat = function(str) {
+QueryField.prototype.concat = function() {
     this.$name.concat.apply(this.$name, Array.prototype.slice.call(arguments));
     return this;
 };
@@ -2089,7 +2202,7 @@ OpenDataQuery.prototype.skip = function(val) {
 };
 // noinspection JSUnusedGlobalSymbols
 /**
- * @param {string} name
+ * @param {*} name
  * @returns OpenDataQuery
  */
 OpenDataQuery.prototype.orderBy = function(name) {

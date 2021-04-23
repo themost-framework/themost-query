@@ -12,6 +12,7 @@ var _odata = require("./odata");
 var _expressions = require("./expressions");
 var _query = require("./query");
 var _utils = require("./utils");
+var _math = require("./math");
 
 module.exports.SqlFormatter = _formatter.SqlFormatter;
 
@@ -23,6 +24,7 @@ module.exports.OpenDataParser = _odata.OpenDataParser;
 
 module.exports.LogicalExpression = _expressions.LogicalExpression;
 module.exports.MethodCallExpression = _expressions.MethodCallExpression;
+module.exports.MethodCallExpressionN = _expressions.MethodCallExpressionN;
 module.exports.LiteralExpression = _expressions.LiteralExpression;
 module.exports.MemberExpression = _expressions.MemberExpression;
 module.exports.ArithmeticExpression = _expressions.ArithmeticExpression;
@@ -49,3 +51,19 @@ module.exports.QueryExpression = _query.QueryExpression;
 
 module.exports.QueryUtils = _utils.QueryUtils;
 module.exports.SqlUtils = _utils.SqlUtils;
+
+
+module.exports.add = _math.add;
+module.exports.bitAnd = _math.bitAnd;
+module.exports.ceil = _math.ceil;
+module.exports.count = _math.count;
+module.exports.divide = _math.divide;
+module.exports.floor = _math.floor;
+module.exports.max = _math.max;
+module.exports.mean = _math.mean;
+module.exports.mod = _math.mod;
+module.exports.multiply = _math.multiply;
+module.exports.round = _math.round;
+module.exports.subtract = _math.subtract;
+module.exports.sum = _math.sum;
+

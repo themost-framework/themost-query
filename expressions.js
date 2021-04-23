@@ -8,6 +8,7 @@
  */
 ///
 var _ = require('lodash');
+var LangUtils = require('@themost/common').LangUtils;
 /**
  * @class
  * @param {*=} p0 The left operand
@@ -22,7 +23,7 @@ function ArithmeticExpression(p0, oper, p1)
     this.right = p1;
 }
 
-ArithmeticExpression.OperatorRegEx = /^(\$add|\$sub|\$mul|\$div|\$mod)$/g;
+ArithmeticExpression.OperatorRegEx = /^(\$add|\$sub|\$mul|\$div|\$mod|\$bit)$/g;
 
 ArithmeticExpression.prototype.exprOf = function()
 {
@@ -33,10 +34,12 @@ ArithmeticExpression.prototype.exprOf = function()
         p = this.left.exprOf();
     else
         p = this.left;
-    if (typeof this.operator === 'undefined' || this.operator===null)
-        throw new Error('Expected arithmetic operator.');
-    if (this.operator.match(ArithmeticExpression.OperatorRegEx)===null)
-        throw new Error('Invalid arithmetic operator.');
+    if (typeof this.operator === 'undefined' || this.operator===null) {
+            throw new Error('Expected arithmetic operator.');
+        }
+    if (this.operator.match(ArithmeticExpression.OperatorRegEx)===null) { 
+            throw new Error('Invalid arithmetic operator.');
+        }
     //build right operand e.g. { $add:[ 5 ] }
     var r = {};
     if (typeof this.right === 'undefined' || this.right===null) {
@@ -223,6 +226,14 @@ function MethodCallExpression(name, args) {
     if (_.isArray(args))
         this.args = args;
 }
+MethodCallExpression.SimpleMethods = [
+    "min",
+    "max",
+    "avg",
+    "mean",
+    "count",
+    "sum"
+]
 /**
  * Converts the current method to the equivalent query expression e.g. { orderDate: { $year: [] } } which is equivalent with year(orderDate)
  * @returns {*}
@@ -235,6 +246,7 @@ MethodCallExpression.prototype.exprOf = function() {
     method[name] = [] ;
     if (this.args.length===0)
         throw new Error('Unsupported method expression. Method arguments cannot be empty.');
+    
     //get first argument
     if (this.args[0] instanceof MemberExpression) {
         var member = this.args[0].name;
@@ -248,7 +260,11 @@ MethodCallExpression.prototype.exprOf = function() {
             else
                 method[name].push(arg);
         }
-        result[member] = method;
+        if (MethodCallExpression.SimpleMethods.includes(this.name)) {
+            result[name] = member;
+        } else {
+            result[member] = method;
+        }
         return result;
     }
     else {
@@ -256,6 +272,108 @@ MethodCallExpression.prototype.exprOf = function() {
     }
 
 };
+
+/**
+ * Creates a method call expression
+ * @class
+ * @constructor
+ */
+function MethodCallExpressionN(name, args) {
+    /**
+     * Gets or sets the name of this method
+     * @type {string}
+     */
+    this.name = name;
+    /**
+     * Gets or sets an array that represents the method arguments
+     * @type {Array<*>}
+     */
+    this.args = [];
+    if (Array.isArray(args)) {
+        this.args = args;
+    }
+}
+LangUtils.inherits(MethodCallExpressionN, MethodCallExpression);
+/**
+ * Converts the current method to the equivalent query expression e.g. { orderDate: { $year: [] } } which is equivalent with year(orderDate)
+ * @returns {*}
+ */
+MethodCallExpressionN.prototype.exprOf = function() {
+    // format name
+    var name = '$'.concat(this.name);
+    if (this.args.length===0)
+        throw new Error('Unsupported method expression. Method arguments cannot be empty.');
+    var args = this.args.map(function(item) {
+        if (item instanceof MemberExpression) {
+            return {
+                $name: item.name
+            };
+        }
+        if (typeof item.exprOf === 'function') {
+            return item.exprOf();
+        }
+        return item;
+    });
+    var result = {};
+    Object.defineProperty(result, name, {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: args
+    });
+    return result;
+};
+
+function SequenceExpression() {
+    this.value = [];
+}
+
+SequenceExpression.prototype.exprOf = function() {
+    return this.value.reduce(function(previousValue, currentValue, currentIndex) {
+        if (currentValue instanceof MemberExpression) {
+            Object.defineProperty(previousValue, currentValue.name, {
+                value: 1,
+                enumerable: true,
+                configurable: true
+            });
+            return previousValue;
+        }
+        else if (currentValue instanceof MethodCallExpression) {
+            // validate method name e.g. Math.floor and get only the last part
+            var name = currentValue.name.split('.');
+            Object.defineProperty(previousValue, name[name.length-1].toString() + currentIndex.toString(), {
+                value: currentValue.exprOf(),
+                enumerable: true,
+                configurable: true
+            });
+            return previousValue;
+        }
+        throw new Error('Sequence expression is invalid or has a member which its type has not implemented yet');
+    }, {});
+}
+
+function ObjectExpression() {
+    //this.value = [];
+}
+
+ObjectExpression.prototype.exprOf = function() {
+    var finalResult = { };
+    var self = this;
+    Object.keys(this).forEach( function(key) {
+        if (typeof self[key].exprOf === 'function') {
+            Object.defineProperty(finalResult, key, {
+                value: self[key].exprOf(),
+                enumerable: true,
+                configurable: true
+            });
+            return;
+        }
+        throw new Error('Object expression is invalid or has a member which its type has not implemented yet');
+    });
+    return finalResult;
+}
+
+
 
 /**
  * @enum
@@ -279,7 +397,7 @@ Operators.Ne = '$ne';
 Operators.In = '$in';
 Operators.NotIn = '$nin';
 Operators.And = '$and';
-Operators.Or = '$or';
+Operators.BitAnd = '$bit';
 
 if (typeof exports !== 'undefined')
 {
@@ -287,9 +405,12 @@ if (typeof exports !== 'undefined')
     module.exports.ArithmeticExpression =  ArithmeticExpression;
     module.exports.MemberExpression =  MemberExpression;
     module.exports.MethodCallExpression =  MethodCallExpression;
+    module.exports.MethodCallExpressionN =  MethodCallExpressionN;
     module.exports.ComparisonExpression =  ComparisonExpression;
     module.exports.LiteralExpression =  LiteralExpression;
     module.exports.LogicalExpression =  LogicalExpression;
+    module.exports.ObjectExpression =  ObjectExpression;
+    module.exports.SequenceExpression =  SequenceExpression;
     /**
      * @param {*=} left The left operand
      * @param {string=} operator The operator
